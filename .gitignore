@@ -1,0 +1,53 @@
+# Python
+__pycache__/
+*.py[cod]
+*.pyd
+*.pyo
+*.so
+
+# Virtual environment
+.venv/
+venv/
+env/
+
+# Distribution / packaging
+dist/
+build/
+*.egg-info/
+*.egg
+
+# pytest / coverage
+.pytest_cache/
+.coverage
+.coverage.*
+htmlcov/
+coverage.xml
+
+# mypy / type checkers
+.mypy_cache/
+.dmypy.json
+
+# Jupyter
+.ipynb_checkpoints/
+
+# Model binaries (large; track source .h5 only if explicitly needed)
+*.tflite
+*.h5
+*.keras
+
+# Calibration / dataset artifacts
+data/
+
+# Pipeline output
+output/
+models/output/
+
+# VS Code workspace settings
+.vscode/
+
+# Claude Code local state
+.claude/
+
+# OS
+Thumbs.db
+.DS_Store

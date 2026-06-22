@@ -1,0 +1,47 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.backends.legacy:build"
+
+[project]
+name = "hw-aware-model-optimizer"
+version = "0.1.0"
+description = "Hardware-aware model optimization pipeline for Arm Ethos-U65 NPU"
+requires-python = ">=3.9"
+readme = "README.md"
+license = {text = "MIT"}
+
+dependencies = [
+    "tensorflow>=2.12",
+    "tensorflow-model-optimization>=0.7",
+    "numpy>=1.23",
+    "lscquant @ git+ssh://git@github.com/lscc-lml/lscquant.git@v1.7.2",
+]
+
+[project.optional-dependencies]
+vela = [
+    "ethos-u-vela>=3.8",
+]
+dev = [
+    "pytest>=7.4",
+    "pytest-cov",
+]
+all = [
+    "ethos-u-vela>=3.8",
+    "pytest>=7.4",
+    "pytest-cov",
+]
+
+[project.scripts]
+hw-optimizer = "optimizer.cli:main"
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["optimizer*"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts   = "-v --tb=short"
+
+[tool.coverage.run]
+source = ["optimizer"]
+omit   = ["tests/*"]
