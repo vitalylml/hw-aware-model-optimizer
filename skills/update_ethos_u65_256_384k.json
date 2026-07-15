@@ -1,0 +1,4 @@
+{
+  "hw_id": "Ethos-u65-256_Dedicated_Sram_384KB",
+  "perf_script": "scripts/vela_perf_ethos_u65_256_384k.py"
+}

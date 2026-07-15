@@ -40,6 +40,10 @@ class Rule:
     verify: str
     priority: Priority
     params: dict = field(default_factory=dict)
+    groups: List[str] = field(default_factory=list)
+    # groups carries two independent classification tags per rule:
+    #   HW dependency: "hw_independent" | "hw_dependent"
+    #   Retraining:    "no_retrain" | "recompute" | "fine_tune" | "full_retrain"
 
     def __str__(self) -> str:
         return (
@@ -49,7 +53,8 @@ class Rule:
             f"  action   : {self.action}\n"
             f"  impact   : {', '.join(i.value for i in self.impact)}\n"
             f"  verify   : {self.verify}\n"
-            f"  params   : {self.params}"
+            f"  params   : {self.params}\n"
+            f"  groups   : {self.groups}"
         )
 
 
@@ -115,6 +120,7 @@ def build_rule_catalogue() -> dict[str, Rule]:
             verify="All connected layers remain channel-consistent; accuracy delta < threshold.",
             priority=Priority.HIGH,
             params={"channel_multiple": CHANNEL_MULTIPLE},
+            groups=["hw_dependent", "recompute"],
         ),
         "RULE-L02": Rule(
             id="RULE-L02",
@@ -128,6 +134,7 @@ def build_rule_catalogue() -> dict[str, Rule]:
             impact=[Impact.CYCLES],
             verify="Per-layer dtype audit; accuracy delta within threshold.",
             priority=Priority.HIGH,
+            groups=["hw_dependent", "fine_tune"],
         ),
         "RULE-L03": Rule(
             id="RULE-L03",
@@ -145,6 +152,7 @@ def build_rule_catalogue() -> dict[str, Rule]:
                 "target_sparsity": DEFAULT_SPARSITY_TARGET,
                 "first_layer_sparsity": FIRST_CONV_SPARSITY_TARGET,
             },
+            groups=["hw_independent", "full_retrain"],
         ),
         "RULE-L04": Rule(
             id="RULE-L04",
@@ -159,6 +167,7 @@ def build_rule_catalogue() -> dict[str, Rule]:
             verify="Vela-reported encoded weight size reduced; accuracy delta < threshold.",
             priority=Priority.MED,
             params={"n_clusters": DEFAULT_CLUSTER_COUNT, "min_clusters": 16},
+            groups=["hw_independent", "fine_tune"],
         ),
         "RULE-L05": Rule(
             id="RULE-L05",
@@ -172,6 +181,7 @@ def build_rule_catalogue() -> dict[str, Rule]:
             impact=[Impact.FALLBACK],
             verify="Vela compilation produces single NPU job (no fallback).",
             priority=Priority.HIGH,
+            groups=["hw_dependent", "no_retrain"],
         ),
         "RULE-L06": Rule(
             id="RULE-L06",
@@ -186,6 +196,7 @@ def build_rule_catalogue() -> dict[str, Rule]:
             verify="Functional equivalence or acceptable accuracy delta; no fallback in Vela.",
             priority=Priority.HIGH,
             params={"substitutions": FALLBACK_ACTIVATIONS},
+            groups=["hw_dependent", "no_retrain"],
         ),
         "RULE-L07": Rule(
             id="RULE-L07",
@@ -202,6 +213,7 @@ def build_rule_catalogue() -> dict[str, Rule]:
             impact=[Impact.CYCLES, Impact.AXI1_BW],
             verify="Channel alignment rule L01 still satisfied; accuracy delta < threshold.",
             priority=Priority.MED,
+            groups=["hw_independent", "fine_tune"],
         ),
 
         # ── Combination rules ────────────────────────────────────────────────
@@ -228,6 +240,7 @@ def build_rule_catalogue() -> dict[str, Rule]:
                 "Vela NNG output shows Conv2DBias, not separate BN operator."
             ),
             priority=Priority.HIGH,
+            groups=["hw_independent", "no_retrain"],
         ),
         "RULE-C02": Rule(
             id="RULE-C02",
@@ -241,6 +254,7 @@ def build_rule_catalogue() -> dict[str, Rule]:
             impact=[Impact.FUSION, Impact.MEMORY],
             verify="Vela compilation log shows fused operator; no intermediate tensor written.",
             priority=Priority.HIGH,
+            groups=["hw_dependent", "no_retrain"],
         ),
         "RULE-C03": Rule(
             id="RULE-C03",
@@ -254,6 +268,7 @@ def build_rule_catalogue() -> dict[str, Rule]:
             impact=[Impact.FALLBACK],
             verify="Add resolved by element-wise engine in Vela; no channel mismatch.",
             priority=Priority.MED,
+            groups=["hw_dependent", "no_retrain"],
         ),
         "RULE-C04": Rule(
             id="RULE-C04",
@@ -267,6 +282,7 @@ def build_rule_catalogue() -> dict[str, Rule]:
             impact=[Impact.CYCLES, Impact.MEMORY],
             verify="Numerical equivalence; new weight matrix satisfies RULE-L01.",
             priority=Priority.MED,
+            groups=["hw_independent", "recompute"],
         ),
         "RULE-C05": Rule(
             id="RULE-C05",
@@ -280,6 +296,7 @@ def build_rule_catalogue() -> dict[str, Rule]:
             impact=[Impact.FALLBACK, Impact.CYCLES],
             verify="Vela reports LSTM as single NPU operator; hidden state accuracy preserved.",
             priority=Priority.HIGH,
+            groups=["hw_dependent", "no_retrain"],
         ),
 
         # ── Model-level rules ────────────────────────────────────────────────
@@ -295,6 +312,7 @@ def build_rule_catalogue() -> dict[str, Rule]:
             impact=[Impact.CYCLES, Impact.AXI1_BW, Impact.MEMORY],
             verify="Per-layer dtype audit; top-level accuracy delta within accepted threshold.",
             priority=Priority.HIGH,
+            groups=["hw_dependent", "fine_tune"],
         ),
         "RULE-M02": Rule(
             id="RULE-M02",
@@ -311,6 +329,7 @@ def build_rule_catalogue() -> dict[str, Rule]:
             impact=[Impact.FALLBACK],
             verify="Vela job count = 1; if > 1, count and cost each fallback boundary.",
             priority=Priority.HIGH,
+            groups=["hw_dependent", "full_retrain"],
         ),
         "RULE-M03": Rule(
             id="RULE-M03",
@@ -333,6 +352,7 @@ def build_rule_catalogue() -> dict[str, Rule]:
                 "global_sparsity_target": DEFAULT_SPARSITY_TARGET,
                 "first_layer_sparsity_target": FIRST_CONV_SPARSITY_TARGET,
             },
+            groups=["hw_independent", "full_retrain"],
         ),
         "RULE-M04": Rule(
             id="RULE-M04",
@@ -346,6 +366,7 @@ def build_rule_catalogue() -> dict[str, Rule]:
             impact=[Impact.MAC_UTIL],
             verify=f"first conv output_channels % {CHANNEL_MULTIPLE} == 0.",
             priority=Priority.HIGH,
+            groups=["hw_dependent", "recompute"],
         ),
         "RULE-M05": Rule(
             id="RULE-M05",
@@ -359,6 +380,7 @@ def build_rule_catalogue() -> dict[str, Rule]:
             impact=[Impact.CYCLES],
             verify="Exported model input shape[0] == 1.",
             priority=Priority.HIGH,
+            groups=["hw_dependent", "no_retrain"],
         ),
         "RULE-M06": Rule(
             id="RULE-M06",
@@ -390,6 +412,7 @@ def build_rule_catalogue() -> dict[str, Rule]:
                     "Conv2D", "DepthwiseConv2D", "SeparableConv2D", "Dense",
                 ],
             },
+            groups=["hw_dependent", "no_retrain"],
         ),
         # ── Sub-rules of RULE-M06 (cascading) ─────────────────────────────────
         "RULE-M06.1": Rule(
@@ -422,6 +445,7 @@ def build_rule_catalogue() -> dict[str, Rule]:
                     "BatchNormalization", "Activation", "ReLU",
                 ],
             },
+            groups=["hw_independent", "no_retrain"],
         ),
         "RULE-M06.2": Rule(
             id="RULE-M06.2",
@@ -459,6 +483,7 @@ def build_rule_catalogue() -> dict[str, Rule]:
                 "weight_init": "bilinear (FCN-style)",
                 "channel_mixing": False,
             },
+            groups=["hw_dependent", "recompute"],
         ),
         "RULE-M06.3": Rule(
             id="RULE-M06.3",
@@ -492,6 +517,7 @@ def build_rule_catalogue() -> dict[str, Rule]:
                 "matched_axis_convention": "channel (axis = -1 / 3)",
                 "preserves_split_layer": True,
             },
+            groups=["hw_independent", "no_retrain"],
         ),
         "RULE-M06.4": Rule(
             id="RULE-M06.4",
@@ -528,6 +554,7 @@ def build_rule_catalogue() -> dict[str, Rule]:
                     "Conv2D", "DepthwiseConv2D", "SeparableConv2D", "Dense",
                 ],
             },
+            groups=["hw_dependent", "no_retrain"],
         ),
         "RULE-M06.5": Rule(
             id="RULE-M06.5",
@@ -556,6 +583,7 @@ def build_rule_catalogue() -> dict[str, Rule]:
                     "rewrite."
                 ),
             },
+            groups=["hw_dependent", "no_retrain"],
         ),
     }
 

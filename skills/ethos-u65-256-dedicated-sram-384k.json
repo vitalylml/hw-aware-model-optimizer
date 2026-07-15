@@ -1,0 +1,274 @@
+{
+  "hw_id": "Ethos-u65-256_Dedicated_Sram_384KB",
+  "description": "Arm Ethos-U65 256 MAC, Dedicated SRAM 384 KB",
+  "perf_script": "scripts/vela_perf_ethos_u65_256_384k.py",
+  "rules": [
+    {
+      "rule_id": "RULE-L01",
+      "enabled": false,
+      "params": {
+        "channel_multiple": 16
+      },
+      "last_eval": {
+        "before_us": 40.0,
+        "after_us": 40.0,
+        "delta_us": 0.0,
+        "delta_pct": 0.0
+      }
+    },
+    {
+      "rule_id": "RULE-L02",
+      "enabled": false,
+      "params": {},
+      "last_eval": {
+        "before_us": 40.0,
+        "after_us": 40.0,
+        "delta_us": 0.0,
+        "delta_pct": 0.0
+      }
+    },
+    {
+      "rule_id": "RULE-L03",
+      "enabled": true,
+      "params": {
+        "target_sparsity": 0.75,
+        "first_layer_sparsity": 0.3,
+        "note": "Higher sparsity target vs 512-MAC baseline due to tighter 384 KB SRAM budget"
+      },
+      "last_eval": null
+    },
+    {
+      "rule_id": "RULE-L04",
+      "enabled": true,
+      "params": {
+        "n_clusters": 32,
+        "min_clusters": 16
+      },
+      "last_eval": null
+    },
+    {
+      "rule_id": "RULE-L05",
+      "enabled": false,
+      "params": {},
+      "last_eval": {
+        "before_us": 40.0,
+        "after_us": 40.0,
+        "delta_us": 0.0,
+        "delta_pct": 0.0
+      }
+    },
+    {
+      "rule_id": "RULE-L06",
+      "enabled": false,
+      "params": {},
+      "last_eval": {
+        "before_us": 40.0,
+        "after_us": 40.0,
+        "delta_us": 0.0,
+        "delta_pct": 0.0
+      }
+    },
+    {
+      "rule_id": "RULE-L07",
+      "enabled": false,
+      "params": {
+        "note": "Higher priority on 256-MAC config; MAC bandwidth savings matter more"
+      },
+      "last_eval": {
+        "before_us": 120.0,
+        "after_us": 130.0,
+        "delta_us": 10.0,
+        "delta_pct": 8.33
+      }
+    },
+    {
+      "rule_id": "RULE-C01",
+      "enabled": false,
+      "params": {},
+      "last_eval": {
+        "before_us": 40.0,
+        "after_us": 40.0,
+        "delta_us": 0.0,
+        "delta_pct": 0.0
+      }
+    },
+    {
+      "rule_id": "RULE-C02",
+      "enabled": false,
+      "params": {},
+      "last_eval": {
+        "before_us": 40.0,
+        "after_us": 40.0,
+        "delta_us": 0.0,
+        "delta_pct": 0.0
+      }
+    },
+    {
+      "rule_id": "RULE-C03",
+      "enabled": false,
+      "params": {},
+      "last_eval": {
+        "before_us": 50.0,
+        "after_us": 50.0,
+        "delta_us": 0.0,
+        "delta_pct": 0.0
+      }
+    },
+    {
+      "rule_id": "RULE-C04",
+      "enabled": true,
+      "params": {},
+      "last_eval": null
+    },
+    {
+      "rule_id": "RULE-C05",
+      "enabled": true,
+      "params": {},
+      "last_eval": null
+    },
+    {
+      "rule_id": "RULE-M01",
+      "enabled": false,
+      "params": {},
+      "last_eval": {
+        "before_us": 40.0,
+        "after_us": 40.0,
+        "delta_us": 0.0,
+        "delta_pct": 0.0
+      }
+    },
+    {
+      "rule_id": "RULE-M02",
+      "enabled": true,
+      "params": {},
+      "last_eval": {
+        "before_us": 20.0,
+        "after_us": 0.0,
+        "delta_us": -20.0,
+        "delta_pct": -100.0
+      }
+    },
+    {
+      "rule_id": "RULE-M03",
+      "enabled": false,
+      "params": {
+        "global_sparsity_target": 0.75,
+        "first_layer_sparsity_target": 0.3,
+        "note": "Tighter SRAM requires higher global sparsity to fit within 384 KB"
+      },
+      "last_eval": {
+        "before_us": 40.0,
+        "after_us": 40.0,
+        "delta_us": 0.0,
+        "delta_pct": 0.0
+      }
+    },
+    {
+      "rule_id": "RULE-M04",
+      "enabled": false,
+      "params": {
+        "channel_multiple": 16,
+        "min_channels": 16
+      },
+      "last_eval": {
+        "before_us": 40.0,
+        "after_us": 40.0,
+        "delta_us": 0.0,
+        "delta_pct": 0.0
+      }
+    },
+    {
+      "rule_id": "RULE-M05",
+      "enabled": false,
+      "params": {},
+      "last_eval": {
+        "before_us": 40.0,
+        "after_us": 40.0,
+        "delta_us": 0.0,
+        "delta_pct": 0.0
+      }
+    },
+    {
+      "rule_id": "RULE-M06",
+      "enabled": false,
+      "params": {
+        "optimise": "Performance",
+        "memory_mode": "Dedicated_Sram"
+      },
+      "last_eval": {
+        "before_us": 40.0,
+        "after_us": 40.0,
+        "delta_us": 0.0,
+        "delta_pct": 0.0
+      }
+    },
+    {
+      "rule_id": "RULE-M06.1",
+      "enabled": true,
+      "params": {
+        "pool_size": [
+          2,
+          2
+        ],
+        "pool_strides": [
+          2,
+          2
+        ]
+      },
+      "last_eval": {
+        "before_us": 30.0,
+        "after_us": 20.0,
+        "delta_us": -10.0,
+        "delta_pct": -33.33
+      }
+    },
+    {
+      "rule_id": "RULE-M06.2",
+      "enabled": true,
+      "params": {
+        "min_factor": 2
+      },
+      "last_eval": {
+        "before_us": 30.0,
+        "after_us": 10.0,
+        "delta_us": -20.0,
+        "delta_pct": -66.67
+      }
+    },
+    {
+      "rule_id": "RULE-M06.3",
+      "enabled": true,
+      "params": {},
+      "last_eval": {
+        "before_us": 70.0,
+        "after_us": 60.0,
+        "delta_us": -10.0,
+        "delta_pct": -14.29
+      }
+    },
+    {
+      "rule_id": "RULE-M06.4",
+      "enabled": false,
+      "params": {},
+      "last_eval": {
+        "before_us": 40.0,
+        "after_us": 40.0,
+        "delta_us": 0.0,
+        "delta_pct": 0.0
+      }
+    },
+    {
+      "rule_id": "RULE-M06.5",
+      "enabled": false,
+      "params": {
+        "note": "Not yet implemented; pending Vela hooks investigation"
+      },
+      "last_eval": {
+        "before_us": 70.0,
+        "after_us": 70.0,
+        "delta_us": 0.0,
+        "delta_pct": 0.0
+      }
+    }
+  ]
+}

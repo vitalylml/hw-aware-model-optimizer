@@ -23,6 +23,10 @@ python -m optimizer.cli export \
 
 # Vela compile only
 python -m optimizer.cli vela --tflite model.tflite --mac 512
+
+# Update skills for a HW target (evaluate all rules, rewrite last_eval + enabled)
+python -m optimizer.cli update-skills \
+    --descriptor skills/update_ethos_u65_256_384k.json
 """
 from __future__ import annotations
 
@@ -166,6 +170,138 @@ def cmd_vela(args: argparse.Namespace) -> None:
     report = compile_with_vela(args.tflite, config=vela_cfg)
     print_vela_report(report)
     report.save(Path(args.output_dir) / "vela_report.json")
+
+
+def cmd_update_skills(args: argparse.Namespace) -> None:
+    """Evaluate every rule in a skills file and update last_eval + enabled flags."""
+    import importlib.util
+    import tempfile
+
+    # ── Load descriptor ──────────────────────────────────────────────────
+    descriptor_path = Path(args.descriptor)
+    if not descriptor_path.exists():
+        log.error("Descriptor not found: %s", descriptor_path)
+        sys.exit(1)
+    descriptor = json.loads(descriptor_path.read_text())
+    hw_id = descriptor.get("hw_id")
+    perf_script_rel = descriptor.get("perf_script")
+    if not hw_id or not perf_script_rel:
+        log.error("Descriptor must contain 'hw_id' and 'perf_script'")
+        sys.exit(1)
+    perf_script_path = Path(perf_script_rel)
+    if not perf_script_path.exists():
+        log.error("perf_script not found: %s", perf_script_path)
+        sys.exit(1)
+
+    # ── Locate skills file by hw_id ──────────────────────────────────────
+    skills_dir = Path(args.skills_dir)
+    skills_file = skills_data = None
+    for f in sorted(skills_dir.glob("*.json")):
+        try:
+            data = json.loads(f.read_text())
+        except (json.JSONDecodeError, OSError):
+            continue
+        if data.get("hw_id") == hw_id:
+            skills_file, skills_data = f, data
+            break
+    if skills_file is None:
+        log.error("No skills file found for hw_id=%r in %s", hw_id, skills_dir)
+        sys.exit(1)
+    log.info("Skills file: %s", skills_file)
+
+    # ── Load measure() from perf_script ─────────────────────────────────
+    spec = importlib.util.spec_from_file_location("_perf_module", perf_script_path)
+    perf_module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(perf_module)
+    measure_fn = getattr(perf_module, "measure", None)
+    if measure_fn is None:
+        log.error("perf_script %s must expose a measure(tflite_path) function",
+                  perf_script_path)
+        sys.exit(1)
+
+    # ── Evaluate each rule ───────────────────────────────────────────────
+    fixtures_dir = Path(args.fixtures_dir)
+    threshold = args.threshold
+    results = []
+
+    with tempfile.TemporaryDirectory(prefix="skills_update_") as tmpdir:
+        tmp = Path(tmpdir)
+        for rule_entry in skills_data["rules"]:
+            rule_id = rule_entry["rule_id"]
+            log.info("Evaluating %s …", rule_id)
+            fixture_dir = fixtures_dir / rule_id
+            before_h5 = fixture_dir / "before.h5"
+            after_h5 = fixture_dir / "after.h5"
+
+            if not before_h5.exists() or not after_h5.exists():
+                log.warning("No fixtures for %s — skipping", rule_id)
+                results.append({"rule_id": rule_id, "status": "skipped",
+                                 "reason": "no fixtures"})
+                continue
+
+            rule_tmp = tmp / rule_id
+            rule_tmp.mkdir(parents=True, exist_ok=True)
+
+            try:
+                before_tflite = _export_fixture_to_tflite(
+                    before_h5, rule_tmp / "before.tflite")
+                after_tflite = _export_fixture_to_tflite(
+                    after_h5, rule_tmp / "after.tflite")
+            except Exception as exc:
+                log.warning("TFLite export failed for %s: %s", rule_id, exc)
+                results.append({"rule_id": rule_id, "status": "error",
+                                 "reason": f"export: {exc}"})
+                continue
+
+            try:
+                before_m = measure_fn(before_tflite, rule_tmp / "vela_before")
+                after_m = measure_fn(after_tflite, rule_tmp / "vela_after")
+            except Exception as exc:
+                log.warning("Vela measurement failed for %s: %s", rule_id, exc)
+                results.append({"rule_id": rule_id, "status": "error",
+                                 "reason": f"vela: {exc}"})
+                continue
+
+            before_us = before_m["batch_inference_time_us"]
+            after_us = after_m["batch_inference_time_us"]
+
+            if before_us == 0.0:
+                log.warning("Vela returned 0 us for %s before-fixture -- skipping",
+                             rule_id)
+                results.append({"rule_id": rule_id, "status": "skipped",
+                                 "reason": "Vela 0 us"})
+                continue
+
+            delta_us = after_us - before_us
+            delta_pct = (delta_us / before_us) * 100.0
+
+            rule_entry["last_eval"] = {
+                "before_us": round(before_us, 2),
+                "after_us":  round(after_us, 2),
+                "delta_us":  round(delta_us, 2),
+                "delta_pct": round(delta_pct, 2),
+            }
+
+            if delta_pct <= -threshold:
+                rule_entry["enabled"] = True
+                status = "enabled"
+            else:
+                rule_entry["enabled"] = False
+                status = "disabled"
+
+            results.append({
+                "rule_id": rule_id, "status": status,
+                "before_us": before_us, "after_us": after_us,
+                "delta_us": delta_us, "delta_pct": delta_pct,
+            })
+            log.debug("%s  %+.1f µs (%+.1f%%) → %s", rule_id, delta_us, delta_pct, status)
+
+    # ── Persist updated skills ───────────────────────────────────────────
+    skills_file.write_text(json.dumps(skills_data, indent=2))
+    log.info("Skills file updated: %s", skills_file)
+
+    # ── Print summary ────────────────────────────────────────────────────
+    _print_skills_update_summary(hw_id, results, threshold)
 
 
 def cmd_run(args: argparse.Namespace) -> None:
@@ -371,6 +507,28 @@ def build_parser() -> argparse.ArgumentParser:
     )
     p_vela.add_argument("--output-dir", default="./vela_output")
 
+    # ── update-skills ─────────────────────────────────────────────────────
+    p_upd = sub.add_parser(
+        "update-skills",
+        help="Evaluate rules against HW via a perf script and update the skills file",
+    )
+    p_upd.add_argument(
+        "--descriptor", required=True,
+        help='Path to JSON descriptor: {"hw_id": "...", "perf_script": "..."}',
+    )
+    p_upd.add_argument(
+        "--skills-dir", default="./skills",
+        help="Directory containing skills JSON files (default: ./skills)",
+    )
+    p_upd.add_argument(
+        "--fixtures-dir", default="./tests/fixtures",
+        help="Root directory of rule fixtures (default: ./tests/fixtures)",
+    )
+    p_upd.add_argument(
+        "--threshold", type=float, default=2.0,
+        help="Min improvement %% to enable/disable a rule (default: 2.0)",
+    )
+
     # ── run (full pipeline) ───────────────────────────────────────────────
     p_run = sub.add_parser("run", help="Run the full optimization pipeline")
     p_run.add_argument("--model",       required=True, help="Input .h5 or .keras model")
@@ -394,6 +552,81 @@ def build_parser() -> argparse.ArgumentParser:
     return parser
 
 
+def _export_fixture_to_tflite(h5_path: Path, output_path: Path) -> Path:
+    """Convert a Keras fixture .h5 to INT8 TFLite using random calibration data."""
+    import numpy as np
+    import tensorflow as tf
+
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+    model = tf.keras.models.load_model(str(h5_path), compile=False)
+
+    input_shape = model.input_shape
+    if isinstance(input_shape, list):
+        input_shape = input_shape[0]
+    cal_shape = tuple(d if d is not None else 1 for d in input_shape)
+
+    def representative_dataset():
+        rng = np.random.default_rng(seed=0)
+        for _ in range(50):
+            yield [rng.uniform(0.0, 1.0, cal_shape).astype(np.float32)]
+
+    converter = tf.lite.TFLiteConverter.from_keras_model(model)
+    converter.optimizations = [tf.lite.Optimize.DEFAULT]
+    converter.representative_dataset = representative_dataset
+    converter.target_spec.supported_ops = [tf.lite.OpsSet.TFLITE_BUILTINS_INT8]
+    converter.inference_input_type = tf.int8
+    converter.inference_output_type = tf.int8
+    output_path.write_bytes(converter.convert())
+    return output_path
+
+
+def _print_skills_update_summary(
+    hw_id: str, results: list, threshold: float
+) -> None:
+    W = 80
+    print()
+    print(f"Skills Update -- {hw_id}")
+    print("=" * W)
+    print(
+        f"{'Rule':<14} {'Before (us)':>12} {'After (us)':>12} "
+        f"{'Delta (us)':>12} {'Delta %':>9}   Status"
+    )
+    print("-" * W)
+
+    n_enabled = n_disabled = n_unchanged = n_skip = 0
+    for r in results:
+        rid = r["rule_id"]
+        st = r["status"]
+        if st in ("skipped", "error"):
+            n_skip += 1
+            print(
+                f"{rid:<14} {'--':>12} {'--':>12} {'--':>12} {'--':>9}"
+                f"   {st} ({r.get('reason', '')})"
+            )
+            continue
+        b, a, d, p = r["before_us"], r["after_us"], r["delta_us"], r["delta_pct"]
+        sign = "+" if d >= 0 else ""
+        if st == "enabled":
+            n_enabled += 1
+        elif st == "disabled":
+            n_disabled += 1
+        else:
+            n_unchanged += 1
+        print(
+            f"{rid:<14} {b:>12.1f} {a:>12.1f} "
+            f"{sign + f'{d:.1f}':>12} {sign + f'{p:.1f}%':>9}   {st}"
+        )
+
+    measured = n_enabled + n_disabled + n_unchanged
+    print("=" * W)
+    print(
+        f"Measured: {measured}   enabled: {n_enabled}   disabled: {n_disabled}   "
+        f"unchanged: {n_unchanged}   skipped/error: {n_skip}   "
+        f"threshold: +/-{threshold:.1f}%"
+    )
+    print()
+
+
 def _infer_n_classes(model) -> int:
     """Infer number of output classes from model output shape."""
     try:
@@ -410,11 +643,12 @@ def main() -> None:
     args = parser.parse_args()
 
     handlers = {
-        "analyze":   cmd_analyze,
-        "transform": cmd_transform,
-        "export":    cmd_export,
-        "vela":      cmd_vela,
-        "run":       cmd_run,
+        "analyze":       cmd_analyze,
+        "transform":     cmd_transform,
+        "export":        cmd_export,
+        "vela":          cmd_vela,
+        "run":           cmd_run,
+        "update-skills": cmd_update_skills,
     }
 
     handler = handlers.get(args.command)
